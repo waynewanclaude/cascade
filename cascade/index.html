@@ -705,7 +705,7 @@
             // 9. Route compiler engine based on widget types
             if (type === "table") {
                 compileTableWidget(bodyEl, widgetData, index);
-            } else if (type === "candlestick") {
+            } else if (type === "candlestick" || type === "stockcharts") {
                 compileCandlestickWidget(bodyEl, widgetData, index);
             } else if (type === "custom") {
                 compileCustomWidget(bodyEl, widgetData, index);
@@ -1058,6 +1058,12 @@
                 const plotWidth = chartWidth - margin.left - margin.right;
                 const plotHeight = chartHeight - margin.top - margin.bottom;
 
+                // Parse visual configurations specs
+                const chartConfig = widgetData.chart_config || {};
+                const ohlcSpec = chartConfig["*OHLC"] || "";
+                const isLogY = String(ohlcSpec).includes("logY");
+                const isStockChartsTheme = String(ohlcSpec).includes("stockcharts") || widgetData.widget_type === "stockcharts";
+
                 let highest = -Infinity;
                 let lowest = Infinity;
                 let maxVolume = 0;
@@ -1072,16 +1078,49 @@
                     if (d.exit_target !== null && d.exit_target < lowest) lowest = d.exit_target;
                     
                     if (d.volume > maxVolume) maxVolume = d.volume;
+
+                    // Automatically scale Y-axis bounds to prevent indicator lines clipping
+                    Object.keys(chartConfig).forEach(key => {
+                        if (key === "*OHLC" || key === "OHLC" || key === "indicators" || key === "markers") return;
+                        
+                        const spec = chartConfig[key];
+                        const val = parseFloat(d[key]);
+                        if (d[key] !== undefined && d[key] !== null && !isNaN(val) && typeof d[key] !== "string") {
+                            let isLineOrDot = false;
+                            if (typeof spec === "string") {
+                                const parts = spec.toLowerCase().split(" ");
+                                isLineOrDot = parts.includes("line") || parts.includes("dot") || parts.includes("circle");
+                            } else if (spec && typeof spec === "object") {
+                                isLineOrDot = spec.type === "line" || spec.type === "dot";
+                            }
+                            
+                            if (isLineOrDot) {
+                                if (val > highest) highest = val;
+                                if (val < lowest) lowest = val;
+                            }
+                        }
+                    });
                 });
 
                 const priceRange = highest - lowest;
                 const paddedHighest = highest + (priceRange * 0.05);
-                const paddedLowest = lowest - (priceRange * 0.05);
+                const paddedLowest = Math.max(0.0001, lowest - (priceRange * 0.05)); // prevent <= 0 log errors
                 const paddedPriceRange = paddedHighest - paddedLowest;
 
-                const getY = (val) => {
-                    return margin.top + plotHeight - ((val - paddedLowest) / paddedPriceRange * plotHeight);
-                };
+                let getY;
+                if (isLogY) {
+                    const logHighest = Math.log(paddedHighest);
+                    const logLowest = Math.log(paddedLowest);
+                    const logRange = logHighest - logLowest;
+                    getY = (val) => {
+                        const clampedVal = Math.max(paddedLowest, val);
+                        return margin.top + plotHeight - ((Math.log(clampedVal) - logLowest) / logRange * plotHeight);
+                    };
+                } else {
+                    getY = (val) => {
+                        return margin.top + plotHeight - ((val - paddedLowest) / paddedPriceRange * plotHeight);
+                    };
+                }
 
                 const getVolHeight = (vol) => {
                     if (maxVolume === 0) return 0;
@@ -1138,6 +1177,7 @@
                     }
                 }
 
+                // 1. Draw Candles
                 series.forEach((d, i) => {
                     const x = margin.left + (i * stepX) + (stepX / 2);
                     const yOpen = getY(d.open);
@@ -1146,8 +1186,20 @@
                     const yLow = getY(d.low);
 
                     const isBullish = d.close >= d.open;
-                    const strokeColor = isBullish ? varCSS("--accent-green") : varCSS("--accent-red");
-                    const fillColor = isBullish ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)";
+                    let strokeColor, fillColor;
+                    
+                    if (isStockChartsTheme) {
+                        if (isBullish) {
+                            strokeColor = "#cbd5e1"; // light grey outline
+                            fillColor = "none";      // hollow body
+                        } else {
+                            strokeColor = "#ef4444"; // red outline
+                            fillColor = "#ef4444";   // solid red body
+                        }
+                    } else {
+                        strokeColor = isBullish ? varCSS("--accent-green") : varCSS("--accent-red");
+                        fillColor = isBullish ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)";
+                    }
 
                     const volH = getVolHeight(d.volume);
                     const volY = margin.top + plotHeight - volH;
@@ -1223,6 +1275,116 @@
                     };
 
                     plotGroup.appendChild(body);
+                });
+
+                // 2. Draw Moving Average Indicator Lines
+                Object.keys(chartConfig).forEach(key => {
+                    if (key === "*OHLC" || key === "OHLC" || key === "indicators" || key === "markers") return;
+                    
+                    const spec = chartConfig[key];
+                    let type = "";
+                    let color = "#ef4444";
+                    
+                    if (typeof spec === "string") {
+                        const parts = spec.toLowerCase().split(" ");
+                        if (parts.includes("line")) {
+                            type = "line";
+                            color = parts[0] || "red";
+                        }
+                    } else if (spec && typeof spec === "object") {
+                        if (spec.type === "line") {
+                            type = "line";
+                            color = spec.color || "red";
+                        }
+                    }
+                    
+                    if (type === "line") {
+                        const pathPoints = [];
+                        series.forEach((d, idx) => {
+                            const val = parseFloat(d[key]);
+                            if (d[key] !== undefined && d[key] !== null && !isNaN(val)) {
+                                const lineX = margin.left + (idx * stepX) + (stepX / 2);
+                                const lineY = getY(val);
+                                pathPoints.push(`${lineX},${lineY}`);
+                            }
+                        });
+                        
+                        if (pathPoints.length > 0) {
+                            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                            path.setAttribute("d", "M " + pathPoints.join(" L "));
+                            path.setAttribute("fill", "none");
+                            path.setAttribute("stroke", color);
+                            path.setAttribute("stroke-width", "1.5");
+                            path.setAttribute("pointer-events", "none");
+                            plotGroup.appendChild(path);
+                        }
+                    }
+                });
+
+                // 3. Draw Marker Shapes (dots, triangles)
+                Object.keys(chartConfig).forEach(key => {
+                    if (key === "*OHLC" || key === "OHLC" || key === "indicators" || key === "markers") return;
+                    
+                    const spec = chartConfig[key];
+                    
+                    series.forEach((d, idx) => {
+                        const val = d[key];
+                        if (val === undefined || val === null) return;
+                        
+                        let markerSpec = null;
+                        
+                        if (typeof spec === "string") {
+                            const parts = spec.toLowerCase().split(" ");
+                            if (parts.includes("dot") || parts.includes("circle") || parts.includes("triangle")) {
+                                markerSpec = spec;
+                            }
+                        } else if (spec && typeof spec === "object") {
+                            const mappedVal = spec[val];
+                            if (mappedVal) {
+                                markerSpec = mappedVal;
+                            }
+                        }
+                        
+                        if (markerSpec) {
+                            const parts = markerSpec.toLowerCase().split(" ");
+                            const color = parts[0] || "red";
+                            const shape = parts[1] || "dot";
+                            
+                            const markX = margin.left + (idx * stepX) + (stepX / 2);
+                            let markY = 0;
+                            
+                            const numericVal = parseFloat(val);
+                            if (!isNaN(numericVal) && typeof val !== "string") {
+                                markY = getY(numericVal);
+                            } else {
+                                if (shape.includes("up") || color === "green") {
+                                    markY = getY(d.low) + 12;
+                                } else {
+                                    markY = getY(d.high) - 12;
+                                }
+                            }
+                            
+                            if (shape.includes("triangle")) {
+                                const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+                                if (shape.includes("up") || color === "green") {
+                                    polygon.setAttribute("points", `${markX},${markY-5} ${markX-4},${markY+3} ${markX+4},${markY+3}`);
+                                } else {
+                                    polygon.setAttribute("points", `${markX},${markY+5} ${markX-4},${markY-3} ${markX+4},${markY-3}`);
+                                }
+                                polygon.setAttribute("fill", color);
+                                polygon.setAttribute("pointer-events", "none");
+                                plotGroup.appendChild(polygon);
+                            } else if (shape.includes("dot") || shape.includes("circle")) {
+                                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                                circle.setAttribute("cx", markX);
+                                circle.setAttribute("cy", markY);
+                                circle.setAttribute("r", "4");
+                                circle.setAttribute("fill", color);
+                                circle.setAttribute("pointer-events", "none");
+                                plotGroup.appendChild(circle);
+                            }
+                        }
+                    });
                 });
             };
 

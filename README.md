@@ -15,6 +15,7 @@ It is designed for researchers, auditors, and developers who want to build custo
 * 📊 **Built-In High-Fidelity Components:**
   * **Interactive Tables:** Character-matching search filters, alphanumeric/percent column headers sorting, and click highlights that trigger dynamic callback cascades.
   * **SVG Candlestick Charts:** Computes coordinate bounds to draw wicks, candles, and transaction price overlays, complete with real-time hover price HUDs.
+  * **StockCharts Advanced Candlestick Explorer:** Mimics the classic StockCharts.com theme (hollow bullish candles and solid red bearish candles) with logarithmic Y axis scaling support (`logY`), custom technical indicators (e.g., moving average lines), event dots (precise price markers), and floating signal markers (e.g., green buy / red sell triangles).
   * **Custom Scoped Panels:** Sandboxes bespoke HTML, scoped CSS variables, and custom JavaScript loops using safe functional constructors IIFE with automatic memory cleanup.
 
 ---
@@ -26,17 +27,20 @@ cascade/
 ├── setup.py                     # Standard module installer config
 ├── demo_study_config.py         # Workspace Trade Backtest Auditor study config
 ├── demo_system_study_config.py  # Workspace 4-Level Server Infrastructure study config
+├── demo_stockcharts_study_config.py # StockCharts dynamic indicators & log scale demo
 └── cascade/                     # Main Package Namespace
     ├── __init__.py              # Unified public API exports
     ├── __main__.py              # CLI router & templates bootstrapper
     ├── core.py                  # Loopback multi-threaded HTTP server, routes & decorators
     ├── table_render.py          # Table widget normalizer & formatters
     ├── candlestick_render.py    # Candlestick series charts coordinate parser
+    ├── stockcharts_render.py    # StockCharts series charts visual config parser
     ├── custom_render.py         # Scoped Custom panel wrapper (html, isolated css/js)
     ├── index.html               # SPA visual engine presentation shell
     └── templates/               # Packaged reusable template files
         ├── demo_study_config.py
-        └── demo_system_study_config.py
+        ├── demo_system_study_config.py
+        └── demo_stockcharts_study_config.py
 ```
 
 ---
@@ -122,6 +126,31 @@ def show_market_history(clicked_row):
     )
 ```
 Run this config: `python -m cascade simple_study.py`. Clicking a company row in the Level 0 table will instantly slide open a Level 1 price candlestick chart beside it!
+
+---
+
+## StockCharts Configuration & Zero-Loss Data Pipeline
+
+The `StockChartsChart` renderer supports a rich, declarative styling language inside its `chart_config` dict. This is used to map custom columns/indicators to specific SVG drawings:
+
+```python
+visual_instructions = {
+    "*OHLC": "stockcharts;logY",  # Hollow theme + logarithmic scaling
+    "mv50": "cyan line",          # Solid line drawing connected points
+    "updw_ind": {                 # Floating Buy/Sell triangle markers
+        "buy": "green triangle-up",   
+        "sell": "red triangle-down"   
+    },
+    "type1": "magenta dot"        # Precise price event coordinate dots
+}
+```
+
+### Schema Rules & Options:
+1. **Classic Theme & Scaling (`*OHLC`)**: Specifying `"stockcharts"` activates a classic white/black hollow bullish body outline and red solid bearish body fill. Adding `;logY` automatically applies a logarithmic price scaling transformation, preventing mathematical log overflows by clamping Y offsets.
+2. **Indicator Lines**: Formatted as `<color> line` (e.g., `"cyan line"`). Renders a continuous, smooth SVG path connecting row coordinates.
+3. **Event Dots**: Formatted as `<color> dot` or `<color> circle`. Plotted precisely on the mapped price coordinates of that column.
+4. **Floating Triangles**: Maps categorical string signals (like `"buy"`/`"sell"`) to relative offsets. Triangles specified with `"up"` or `"green"` dynamically float cleanly below the candlestick's low wick. Triangles specified with `"down"` or `"red"` hover above the high wick.
+5. **Zero-Loss Data Pipeline**: Any column not specified in the `chart_config` (such as `"unmapped_secret"` in the templates) is **completely hidden** from the visual SVG render, but remains stored in the data payload. When a user clicks a candlestick, the full unmapped data record is fully and perfectly propagated to downstream cascading callback panels.
 
 ---
 
