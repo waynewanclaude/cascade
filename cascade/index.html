@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cascade Audit Workspace</title>
+    
+    <!-- Google Fonts Outfit & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --------------------------------------------------
+           1. Core Design System & Theme (Obsidian Opaque Slate)
+           -------------------------------------------------- */
+        :root {
+            --bg-canvas: #07090e;
+            --bg-card: #0f1422;
+            --bg-header: #0a0d17;
+            --bg-hover: #171d30;
+            --bg-active: #1d253d;
+            
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --border-card: #1e293b;
+            --border-hover: #334155;
+            
+            --font-outfit: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            
+            --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-canvas);
+            color: var(--text-main);
+            font-family: var(--font-outfit);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --------------------------------------------------
+           2. Dashboard Header Shell
+           -------------------------------------------------- */
+        .workspace-header {
+            background-color: var(--bg-header);
+            border-bottom: 1px solid var(--border-card);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .workspace-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-mark {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-cyan), #3b82f6);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #000;
+            font-size: 14px;
+            letter-spacing: -1px;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+        }
+
+        .workspace-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, var(--text-main), var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-compact {
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-family: var(--font-outfit);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-compact:hover {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .btn-compact:active {
+            transform: translateY(0);
+        }
+
+        /* --------------------------------------------------
+           3. Workspace Canvas & Panel Wrapper Flow
+           -------------------------------------------------- */
+        .workspace-canvas {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            padding: 40px;
+            display: flex;
+            align-items: flex-start;
+            gap: 40px;
+        }
+
+        .workspace-canvas.vertical-layout {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        /* Slide-in entry animation lock */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(40px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        /* Panel Container Constraints */
+        .panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            box-shadow: var(--shadow-premium);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0; /* Constraint: prevent row flex shrinking to 0px */
+            position: relative;
+            overflow: visible; /* Constraint: boundary expand fits contents */
+            width: fit-content;
+            height: fit-content;
+            z-index: 10;
+            animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .panel:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.8), 0 0 1px rgba(6, 182, 212, 0.15);
+        }
+
+        /* Focus Active Class (brought to top of layering stack) */
+        .panel.active-panel {
+            z-index: 100 !important;
+            border-color: rgba(6, 182, 212, 0.4) !important;
+            box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.9), 0 0 2px rgba(6, 182, 212, 0.3);
+        }
+
+        /* Drag-Resizing Temporary Rules */
+        .panel.panel-resizing {
+            transition: none !important;
+            user-select: none;
+        }
+
+        /* Panel Header Drag Handle */
+        .panel-header {
+            background-color: rgba(0, 0, 0, 0.25);
+            border-bottom: 1px solid var(--border-card);
+            padding: 12px 18px;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+            cursor: grab;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .panel-header:active {
+            cursor: grabbing;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--accent-cyan);
+            display: inline-block;
+        }
+
+        .panel-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s ease;
+        }
+
+        .panel-close-btn:hover {
+            color: var(--accent-red);
+        }
+
+        /* Panel Body Content Viewports */
+        .panel-body {
+            padding: 18px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: visible; /* Prevents inside clipping */
+        }
+
+        /* Bottom-Right Resize Handle */
+        .resizer-handle {
+            width: 14px;
+            height: 14px;
+            position: absolute;
+            right: 2px;
+            bottom: 2px;
+            cursor: se-resize;
+            z-index: 1000;
+            background: linear-gradient(135deg, transparent 45%, var(--text-dim) 55%, transparent 60%, var(--text-dim) 70%);
+            border-bottom-right-radius: 11px;
+            opacity: 0.4;
+            transition: opacity 0.15s ease;
+        }
+
+        .resizer-handle:hover {
+            opacity: 0.9;
+        }
+
+        /* --------------------------------------------------
+           4. Built-in Widget 1: Data Table
+           -------------------------------------------------- */
+        .widget-table-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        /* Search Filter */
+        .table-search-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .table-search-input {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-card);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-family: var(--font-outfit);
+            font-size: 13px;
+            padding: 8px 12px 8px 30px;
+            outline: none;
+            transition: all 0.15s ease;
+        }
+
+        .table-search-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 8px rgba(6, 182, 212, 0.15);
+        }
+
+        .table-search-wrapper::before {
+            content: '🔍';
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* Table Markup */
+        .audit-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .audit-table th {
+            font-family: var(--font-outfit);
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            padding: 10px 12px;
+            border-bottom: 2px solid var(--border-card);
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .audit-table th:hover {
+            color: var(--text-main);
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .audit-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-card);
+            color: var(--text-muted);
+            transition: color 0.1s ease;
+            white-space: nowrap;
+        }
+
+        /* Row Click Highlights & callback binders */
+        .audit-table tbody tr {
+            cursor: pointer;
+            transition: background-color 0.1s ease;
+        }
+
+        .audit-table tbody tr:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .audit-table tbody tr:hover td {
+            color: var(--text-main);
+        }
+
+        .audit-table tbody tr.selected-row {
+            background-color: var(--bg-active) !important;
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .audit-table tbody tr.selected-row td {
+            color: var(--accent-cyan) !important;
+            font-weight: 500;
+        }
+
+        /* Dynamic cell formatting text decorators */
+        .text-green { color: var(--accent-green) !important; }
+        .text-red { color: var(--accent-red) !important; }
+
+        /* --------------------------------------------------
+           5. Built-in Widget 2: SVG Candlestick Chart
+           -------------------------------------------------- */
+        .widget-chart-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Monospace HUD Panel */
+        .chart-hud {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-card);
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            color: var(--text-muted);
+        }
+
+        .hud-val {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        /* SVG Layouts */
+        .candlestick-svg {
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 6px;
+            user-select: none;
+        }
+
+        /* Hover lines */
+        .chart-crosshair {
+            stroke: var(--text-dim);
+            stroke-width: 0.5px;
+            stroke-dasharray: 2, 2;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .chart-target-line {
+            stroke-width: 1px;
+            stroke-dasharray: 4, 4;
+        }
+        
+        .chart-axis-label {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            fill: var(--text-dim);
+        }
+
+        /* --------------------------------------------------
+           6. Built-in Widget 3: Custom Scoped Panel Compiler
+           -------------------------------------------------- */
+        .custom-widget-scope {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Custom Panel Empty defaults */
+        .custom-widget-scope p {
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        /* --------------------------------------------------
+           7. Compact Layout Indicator Tooltips
+           -------------------------------------------------- */
+        .compact-alert-banner {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: var(--bg-header);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 8px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow-premium);
+            z-index: 10000;
+            transform: translateY(150%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .compact-alert-banner.banner-visible {
+            transform: translateY(0);
+        }
+
+        .alert-logo {
+            font-size: 18px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Dashboard Header Visual Shell -->
+    <header class="workspace-header">
+        <div class="workspace-title-group">
+            <div class="logo-mark">C</div>
+            <h1 class="workspace-title" id="workspaceHeaderTitle">Cascade Audit Workspace</h1>
+        </div>
+        <div class="controls-group">
+            <button class="btn-compact" id="compactBtn" title="Compact size-sorted staircase overlay">
+                Compact ◫
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Dynamic Scrolling Canvas -->
+    <main class="workspace-canvas" id="workspaceCanvas">
+        <!-- Panel Cards are appended here dynamically -->
+    </main>
+
+    <!-- Interactive compacting layout confirmation banner -->
+    <div class="compact-alert-banner" id="compactBanner">
+        <span class="alert-logo">◫</span>
+        <div>
+            <h4 style="font-size: 13px; font-weight: 700; color: var(--accent-cyan);">Cascade Compressed</h4>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Size-sorted staircase overlay applied & persisted!</p>
+        </div>
+    </div>
+
+    <!-- --------------------------------------------------
+         8. Visual Workspace Engine Javascript Core
+         -------------------------------------------------- -->
+    <script>
+        // Central client state tracker
+        const STATE = {
+            title: "Cascade Dashboard",
+            orientation: "horizontal",
+            persistence_mode: "browser", // Stored inside browser profile localStorage
+            panels: [] // Core array of loaded visual widget panels
+        };
+
+        // DOM elements cache
+        const canvasEl = document.getElementById("workspaceCanvas");
+        const headerTitleEl = document.getElementById("workspaceHeaderTitle");
+        const compactBtn = document.getElementById("compactBtn");
+        const compactBanner = document.getElementById("compactBanner");
+
+        // --------------------------------------------------
+        // A. Layout Setup Initializations
+        // --------------------------------------------------
+        async function bootstrap() {
+            try {
+                // 1. Fetch baseline configuration settings
+                const layoutRes = await fetch("/api/layout");
+                const layoutData = await layoutRes.json();
+                
+                STATE.title = layoutData.title || "Cascade Dashboard";
+                STATE.orientation = layoutData.orientation || "horizontal";
+                STATE.persistence_mode = "browser"; // Strictly localized browser profile
+                
+                // Update workspace headers
+                headerTitleEl.textContent = STATE.title;
+                document.title = STATE.title + " - Cascade";
+                
+                if (STATE.orientation === "vertical") {
+                    canvasEl.classList.add("vertical-layout");
+                }
+                
+                // 2. Fetch root Callback level 0 data
+                const rootRes = await fetch("/api/root");
+                const rootData = await rootRes.json();
+                
+                if (rootData.error) {
+                    alert("Framework Configuration Error: " + rootData.error);
+                    return;
+                }
+                
+                // Render root Level 0 column
+                renderPanel(0, rootData.widget_type, rootData.widget_data);
+            } catch (err) {
+                console.error("Framework bootstrap failed:", err);
+            }
+        }
+
+        // Helper to retrieve localStorage coordinates
+        function getPersistedLayout(panelIndex) {
+            const key = `cascade-layout-${STATE.title}`;
+            const dataStr = localStorage.getItem(key);
+            if (!dataStr) return null;
+            try {
+                const layout = JSON.parse(dataStr);
+                return layout[panelIndex] || null;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        // Helper to save coordinates to browser profile
+        function persistPanelLayout(panelIndex, x, y, width, height) {
+            const key = `cascade-layout-${STATE.title}`;
+            let currentLayout = {};
+            try {
+                const dataStr = localStorage.getItem(key);
+                if (dataStr) {
+                    currentLayout = JSON.parse(dataStr);
+                }
+            } catch(e) {}
+            
+            currentLayout[panelIndex] = { x, y, width, height };
+            localStorage.setItem(key, JSON.stringify(currentLayout));
+        }
+
+        // Helper to remove individual coordinate cache
+        function clearPanelLayout(panelIndex) {
+            const key = `cascade-layout-${STATE.title}`;
+            try {
+                const dataStr = localStorage.getItem(key);
+                if (dataStr) {
+                    const layout = JSON.parse(dataStr);
+                    delete layout[panelIndex];
+                    localStorage.setItem(key, JSON.stringify(layout));
+                }
+            } catch(e) {}
+        }
+
+        // --------------------------------------------------
+        // B. Panel Card Generator
+        // --------------------------------------------------
+        function renderPanel(index, type, widgetData) {
+            // 1. Clear any downstream columns beyond target insertion index
+            clearDownstreamPanels(index);
+
+            // 2. Build Card shell
+            const panelEl = document.createElement("div");
+            panelEl.className = "panel";
+            panelEl.dataset.index = index;
+            panelEl.id = `panel-${index}`;
+
+            // Handle slide-in animation locking: release to allow mouse drags
+            panelEl.addEventListener("animationend", () => {
+                panelEl.style.animation = "none";
+            });
+
+            // 3. Size constraints: apply widgetData.width as a min-width constraint
+            if (widgetData.width) {
+                panelEl.style.minWidth = widgetData.width;
+            }
+            if (widgetData.height) {
+                panelEl.style.height = widgetData.height;
+            }
+
+            // 4. Position resolving: Check browser profile persistence first
+            const saved = getPersistedLayout(index);
+            if (saved) {
+                panelEl.style.transform = `translate(${saved.x}px, ${saved.y}px)`;
+                panelEl.dataset.dragX = saved.x;
+                panelEl.dataset.dragY = saved.y;
+                if (saved.width) {
+                    panelEl.style.minWidth = "0px"; // Release min-width to allow manual resized size
+                    panelEl.style.width = saved.width;
+                }
+                if (saved.height) {
+                    panelEl.style.height = saved.height;
+                    panelEl.dataset.resized = "true";
+                }
+            } else {
+                panelEl.dataset.dragX = 0;
+                panelEl.dataset.dragY = 0;
+            }
+
+            // 5. Build Header drag handle
+            const headerEl = document.createElement("div");
+            headerEl.className = "panel-header";
+            
+            const titleEl = document.createElement("div");
+            titleEl.className = "panel-title";
+            titleEl.textContent = widgetData.title || `Level ${index} Widget`;
+            headerEl.appendChild(titleEl);
+
+            // Add close button for downstream panels
+            if (index > 0) {
+                const closeBtn = document.createElement("button");
+                closeBtn.className = "panel-close-btn";
+                closeBtn.innerHTML = "×";
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    clearDownstreamPanels(index);
+                };
+                headerEl.appendChild(closeBtn);
+            }
+            panelEl.appendChild(headerEl);
+
+            // 6. Build Body content
+            const bodyEl = document.createElement("div");
+            bodyEl.className = "panel-body";
+            panelEl.appendChild(bodyEl);
+
+            // 7. Embed Resizer Handle
+            const resizerEl = document.createElement("div");
+            resizerEl.className = "resizer-handle";
+            panelEl.appendChild(resizerEl);
+
+            // 8. Bind interactive mouse behavior handlers
+            bindPanelEvents(panelEl, headerEl, resizerEl, index);
+
+            // 9. Route compiler engine based on widget types
+            if (type === "table") {
+                compileTableWidget(bodyEl, widgetData, index);
+            } else if (type === "candlestick") {
+                compileCandlestickWidget(bodyEl, widgetData, index);
+            } else if (type === "custom") {
+                compileCustomWidget(bodyEl, widgetData, index);
+            }
+
+            // 10. Append card directly to main scrolling viewport canvas
+            canvasEl.appendChild(panelEl);
+            STATE.panels[index] = panelEl;
+        }
+
+        function clearDownstreamPanels(startingIndex) {
+            for (let i = STATE.panels.length - 1; i >= startingIndex; i--) {
+                const p = STATE.panels[i];
+                if (p) {
+                    // Critical clean check: trigger custom script intervals termination
+                    const body = p.querySelector(".panel-body");
+                    if (body && body.dataset.intervalId) {
+                        clearInterval(parseInt(body.dataset.intervalId));
+                    }
+                    
+                    p.remove();
+                    STATE.panels.splice(i, 1);
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // C. Z-Order Focus & Drag Translation persistence
+        // --------------------------------------------------
+        function bindPanelEvents(panelEl, headerEl, resizerEl, index) {
+            // Bubbling listener to bring card to top of the layering stack upon click
+            panelEl.addEventListener("mousedown", () => {
+                document.querySelectorAll(".panel").forEach(p => p.classList.remove("active-panel"));
+                panelEl.classList.add("active-panel");
+            });
+
+            // Drag translation persistence handles
+            headerEl.addEventListener("mousedown", (e) => {
+                if (e.target.closest(".panel-close-btn")) return;
+                
+                // Immediately release animation transitions lock
+                panelEl.style.animation = "none";
+                document.querySelectorAll(".panel").forEach(p => p.classList.remove("active-panel"));
+                panelEl.classList.add("active-panel");
+
+                let startX = e.clientX;
+                let startY = e.clientY;
+                let currentDragX = parseFloat(panelEl.dataset.dragX) || 0;
+                let currentDragY = parseFloat(panelEl.dataset.dragY) || 0;
+
+                function onMouseMove(moveEvent) {
+                    const dx = moveEvent.clientX - startX;
+                    const dy = moveEvent.clientY - startY;
+                    const targetX = currentDragX + dx;
+                    const targetY = currentDragY + dy;
+
+                    panelEl.style.transform = `translate(${targetX}px, ${targetY}px)`;
+                    panelEl.dataset.dragX = targetX;
+                    panelEl.dataset.dragY = targetY;
+                }
+
+                function onMouseUp() {
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                    
+                    // Persist parameters to browser profile database
+                    persistPanelLayout(
+                        index, 
+                        parseFloat(panelEl.dataset.dragX), 
+                        parseFloat(panelEl.dataset.dragY),
+                        panelEl.style.width,
+                        panelEl.style.height
+                    );
+                }
+
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+            });
+
+            // Double click header to clear browser profile cache and snap back to config grid flow
+            headerEl.addEventListener("dblclick", () => {
+                clearPanelLayout(index);
+                panelEl.style.transform = "none";
+                panelEl.style.width = "";
+                panelEl.style.minWidth = "";
+                panelEl.style.height = "";
+                panelEl.dataset.dragX = 0;
+                panelEl.dataset.dragY = 0;
+                panelEl.removeAttribute("data-resized");
+                
+                // Re-draw candlestick chart if it is inside this panel
+                const svg = panelEl.querySelector(".candlestick-svg");
+                if (svg && svg.drawChart) {
+                    svg.drawChart();
+                }
+            });
+
+            // Bottom-Right Drag Resizing Handle Binders
+            resizerEl.addEventListener("mousedown", (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+
+                panelEl.classList.add("panel-resizing");
+
+                let startWidth = panelEl.offsetWidth;
+                let startHeight = panelEl.offsetHeight;
+                let startX = e.clientX;
+                let startY = e.clientY;
+
+                function onMouseMove(moveEvent) {
+                    const dw = moveEvent.clientX - startX;
+                    const dh = moveEvent.clientY - startY;
+                    
+                    // Release minWidth constraint so manual sizes take precedence
+                    panelEl.style.minWidth = "0px";
+                    
+                    const newWidth = Math.max(250, startWidth + dw);
+                    const newHeight = Math.max(150, startHeight + dh);
+
+                    panelEl.style.width = `${newWidth}px`;
+                    panelEl.style.height = `${newHeight}px`;
+                    panelEl.dataset.resized = "true";
+
+                    // Re-render candlestick charts inside resizing frames in real time
+                    const svg = panelEl.querySelector(".candlestick-svg");
+                    if (svg && svg.drawChart) {
+                        svg.drawChart();
+                    }
+                }
+
+                function onMouseUp() {
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                    panelEl.classList.remove("panel-resizing");
+
+                    // Save custom dimensions to browser profile
+                    persistPanelLayout(
+                        index, 
+                        parseFloat(panelEl.dataset.dragX) || 0, 
+                        parseFloat(panelEl.dataset.dragY) || 0,
+                        panelEl.style.width,
+                        panelEl.style.height
+                    );
+                }
+
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+            });
+        }
+
+        // --------------------------------------------------
+        // D. Built-in Compilers 1: Data Table Widget
+        // --------------------------------------------------
+        function compileTableWidget(container, widgetData, index) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "widget-table-container";
+
+            // 1. Build real-time search box
+            const searchWrapper = document.createElement("div");
+            searchWrapper.className = "table-search-wrapper";
+            const searchInput = document.createElement("input");
+            searchInput.className = "table-search-input";
+            searchInput.placeholder = "Search rows...";
+            searchWrapper.appendChild(searchInput);
+            wrapper.appendChild(searchWrapper);
+
+            // 2. Build table structure
+            const table = document.createElement("table");
+            table.className = "audit-table";
+            
+            const thead = document.createElement("thead");
+            const headerRow = document.createElement("tr");
+            
+            let columns = widgetData.columns || [];
+            let rows = widgetData.rows || [];
+            
+            // Build columns headers
+            columns.forEach(col => {
+                const th = document.createElement("th");
+                th.dataset.col = col;
+                th.dataset.direction = "asc";
+                th.innerHTML = `${col} <span class="sort-indicator" style="opacity: 0.3;">↕</span>`;
+                
+                // Interactive column sort handles
+                th.onclick = () => {
+                    const dir = th.dataset.direction === "asc" ? "desc" : "asc";
+                    th.dataset.direction = dir;
+                    
+                    headerRow.querySelectorAll("th").forEach(h => {
+                        if (h !== th) {
+                            h.querySelector(".sort-indicator").innerHTML = "↕";
+                            h.querySelector(".sort-indicator").style.opacity = "0.3";
+                        }
+                    });
+                    
+                    th.querySelector(".sort-indicator").innerHTML = dir === "asc" ? "▴" : "▾";
+                    th.querySelector(".sort-indicator").style.opacity = "1";
+                    
+                    sortTable(tbody, col, dir);
+                };
+                
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement("tbody");
+            
+            function populateRows(filteredRows) {
+                tbody.innerHTML = "";
+                filteredRows.forEach(row => {
+                    const tr = document.createElement("tr");
+                    
+                    columns.forEach(col => {
+                        const td = document.createElement("td");
+                        const cellVal = row[col];
+                        
+                        const valStr = String(cellVal);
+                        if (valStr.startsWith("+") || valStr.includes("+$")) {
+                            td.className = "text-green";
+                        } else if (valStr.startsWith("-") || valStr.includes("-$")) {
+                            td.className = "text-red";
+                        }
+                        
+                        td.textContent = cellVal === undefined || cellVal === null ? "" : cellVal;
+                        tr.appendChild(td);
+                    });
+                    
+                    tr.onclick = async () => {
+                        tbody.querySelectorAll("tr").forEach(r => r.classList.remove("selected-row"));
+                        tr.classList.add("selected-row");
+                        
+                        if (widgetData.on_click) {
+                            try {
+                                const response = await fetch("/api/callback", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        callback: widgetData.on_click,
+                                        row: row,
+                                        level: index
+                                    })
+                                });
+                                const downstream = await response.json();
+                                if (downstream.error) {
+                                    alert("Auditing Callback Error: " + downstream.error);
+                                    return;
+                                }
+                                
+                                renderPanel(index + 1, downstream.widget_type, downstream.widget_data);
+                            } catch(err) {
+                                console.error("Cascade Callback failed:", err);
+                            }
+                        }
+                    };
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+
+            populateRows(rows);
+            table.appendChild(tbody);
+            wrapper.appendChild(table);
+            container.appendChild(wrapper);
+
+            searchInput.oninput = () => {
+                const term = searchInput.value.toLowerCase().trim();
+                if (!term) {
+                    populateRows(rows);
+                    return;
+                }
+                const filtered = rows.filter(row => {
+                    return columns.some(col => String(row[col]).toLowerCase().includes(term));
+                });
+                populateRows(filtered);
+            };
+        }
+
+        function sortTable(tbody, col, direction) {
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            
+            rows.sort((a, b) => {
+                let cellA = a.querySelector(`td:nth-child(${a.closest("table").querySelector(`th[data-col="${col}"]`).cellIndex + 1})`).textContent;
+                let cellB = b.querySelector(`td:nth-child(${b.closest("table").querySelector(`th[data-col="${col}"]`).cellIndex + 1})`).textContent;
+                
+                const clean = (val) => {
+                    let s = val.replace(/[+$%,\s]/g, "");
+                    if (s.startsWith("-")) return parseFloat(s) || 0;
+                    return parseFloat(s) || 0;
+                };
+
+                const numA = clean(cellA);
+                const numB = clean(cellB);
+                
+                let comparison = 0;
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    comparison = numA - numB;
+                } else {
+                    comparison = cellA.localeCompare(cellB);
+                }
+                
+                return direction === "asc" ? comparison : -comparison;
+            });
+            
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        // --------------------------------------------------
+        // E. Built-in Compilers 2: SVG Candlestick Widget
+        // --------------------------------------------------
+        function compileCandlestickWidget(container, widgetData, index) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "widget-chart-container";
+
+            const hud = document.createElement("div");
+            hud.className = "chart-hud";
+            hud.innerHTML = `
+                <div>O: <span class="hud-val" id="hud-o">-</span></div>
+                <div>H: <span class="hud-val" id="hud-h">-</span></div>
+                <div>L: <span class="hud-val" id="hud-l">-</span></div>
+                <div>C: <span class="hud-val" id="hud-c">-</span></div>
+                <div>V: <span class="hud-val" id="hud-v">-</span></div>
+            `;
+            wrapper.appendChild(hud);
+
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("class", "candlestick-svg");
+            wrapper.appendChild(svg);
+            container.appendChild(wrapper);
+
+            const series = widgetData.series || [];
+
+            svg.drawChart = () => {
+                svg.innerHTML = "";
+                if (series.length === 0) return;
+
+                const card = container.closest(".panel");
+                let chartWidth = parseInt(widgetData.width) || 560;
+                let chartHeight = parseInt(widgetData.height) || 280;
+
+                if (card && card.dataset.resized === "true") {
+                    chartWidth = card.clientWidth - 38;
+                    chartHeight = card.clientHeight - 85;
+                }
+
+                svg.setAttribute("width", chartWidth);
+                svg.setAttribute("height", chartHeight);
+
+                const margin = { top: 20, right: 60, bottom: 25, left: 15 };
+                const plotWidth = chartWidth - margin.left - margin.right;
+                const plotHeight = chartHeight - margin.top - margin.bottom;
+
+                let highest = -Infinity;
+                let lowest = Infinity;
+                let maxVolume = 0;
+
+                series.forEach(d => {
+                    if (d.high > highest) highest = d.high;
+                    if (d.low < lowest) lowest = d.low;
+                    
+                    if (d.entry_target !== null && d.entry_target > highest) highest = d.entry_target;
+                    if (d.entry_target !== null && d.entry_target < lowest) lowest = d.entry_target;
+                    if (d.exit_target !== null && d.exit_target > highest) highest = d.exit_target;
+                    if (d.exit_target !== null && d.exit_target < lowest) lowest = d.exit_target;
+                    
+                    if (d.volume > maxVolume) maxVolume = d.volume;
+                });
+
+                const priceRange = highest - lowest;
+                const paddedHighest = highest + (priceRange * 0.05);
+                const paddedLowest = lowest - (priceRange * 0.05);
+                const paddedPriceRange = paddedHighest - paddedLowest;
+
+                const getY = (val) => {
+                    return margin.top + plotHeight - ((val - paddedLowest) / paddedPriceRange * plotHeight);
+                };
+
+                const getVolHeight = (vol) => {
+                    if (maxVolume === 0) return 0;
+                    return (vol / maxVolume) * (plotHeight * 0.15);
+                };
+
+                const barCount = series.length;
+                const stepX = plotWidth / barCount;
+                const candleWidth = stepX * 0.7;
+
+                const plotGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                svg.appendChild(plotGroup);
+
+                const firstBar = series[0];
+                if (firstBar) {
+                    if (firstBar.entry_target !== null) {
+                        const entryY = getY(firstBar.entry_target);
+                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        line.setAttribute("x1", margin.left);
+                        line.setAttribute("y1", entryY);
+                        line.setAttribute("x2", margin.left + plotWidth);
+                        line.setAttribute("y2", entryY);
+                        line.setAttribute("class", "chart-target-line");
+                        line.setAttribute("stroke", varCSS("--accent-green"));
+                        plotGroup.appendChild(line);
+
+                        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                        txt.setAttribute("x", margin.left + plotWidth + 5);
+                        txt.setAttribute("y", entryY + 3);
+                        txt.setAttribute("class", "chart-axis-label");
+                        txt.setAttribute("fill", varCSS("--accent-green"));
+                        txt.textContent = `Entry: $${firstBar.entry_target.toFixed(2)}`;
+                        plotGroup.appendChild(txt);
+                    }
+
+                    if (firstBar.exit_target !== null) {
+                        const exitY = getY(firstBar.exit_target);
+                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        line.setAttribute("x1", margin.left);
+                        line.setAttribute("y1", exitY);
+                        line.setAttribute("x2", margin.left + plotWidth);
+                        line.setAttribute("y2", exitY);
+                        line.setAttribute("class", "chart-target-line");
+                        line.setAttribute("stroke", varCSS("--accent-red"));
+                        plotGroup.appendChild(line);
+
+                        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                        txt.setAttribute("x", margin.left + plotWidth + 5);
+                        txt.setAttribute("y", exitY + 3);
+                        txt.setAttribute("class", "chart-axis-label");
+                        txt.setAttribute("fill", varCSS("--accent-red"));
+                        txt.textContent = `Exit: $${firstBar.exit_target.toFixed(2)}`;
+                        plotGroup.appendChild(txt);
+                    }
+                }
+
+                series.forEach((d, i) => {
+                    const x = margin.left + (i * stepX) + (stepX / 2);
+                    const yOpen = getY(d.open);
+                    const yClose = getY(d.close);
+                    const yHigh = getY(d.high);
+                    const yLow = getY(d.low);
+
+                    const isBullish = d.close >= d.open;
+                    const strokeColor = isBullish ? varCSS("--accent-green") : varCSS("--accent-red");
+                    const fillColor = isBullish ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)";
+
+                    const volH = getVolHeight(d.volume);
+                    const volY = margin.top + plotHeight - volH;
+                    const volRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    volRect.setAttribute("x", x - (candleWidth / 2));
+                    volRect.setAttribute("y", volY);
+                    volRect.setAttribute("width", candleWidth);
+                    volRect.setAttribute("height", volH);
+                    volRect.setAttribute("fill", isBullish ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)");
+                    plotGroup.appendChild(volRect);
+
+                    const wick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    wick.setAttribute("x1", x);
+                    wick.setAttribute("y1", yHigh);
+                    wick.setAttribute("x2", x);
+                    wick.setAttribute("y2", yLow);
+                    wick.setAttribute("stroke", strokeColor);
+                    wick.setAttribute("stroke-width", "1.5");
+                    plotGroup.appendChild(wick);
+
+                    const body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    const bodyY = Math.min(yOpen, yClose);
+                    const bodyH = Math.max(2, Math.abs(yOpen - yClose));
+                    
+                    body.setAttribute("x", x - (candleWidth / 2));
+                    body.setAttribute("y", bodyY);
+                    body.setAttribute("width", candleWidth);
+                    body.setAttribute("height", bodyH);
+                    body.setAttribute("fill", fillColor);
+                    body.setAttribute("stroke", strokeColor);
+                    body.setAttribute("stroke-width", "1.5");
+                    
+                    body.style.cursor = "pointer";
+                    body.onclick = async (e) => {
+                        e.stopPropagation();
+                        plotGroup.querySelectorAll("rect").forEach(r => r.setAttribute("stroke-dasharray", "none"));
+                        body.setAttribute("stroke-dasharray", "2,2");
+
+                        if (widgetData.on_click) {
+                            try {
+                                const response = await fetch("/api/callback", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        callback: widgetData.on_click,
+                                        row: d,
+                                        level: index
+                                    })
+                                });
+                                const downstream = await response.json();
+                                if (downstream.error) {
+                                    alert("Callback Execution Failure: " + downstream.error);
+                                    return;
+                                }
+                                renderPanel(index + 1, downstream.widget_type, downstream.widget_data);
+                            } catch(err) {
+                                console.error("Dynamic Graph Cascade Callback failed:", err);
+                            }
+                        }
+                    };
+                    
+                    body.onmouseenter = () => {
+                        document.getElementById("hud-o").textContent = d.open.toFixed(2);
+                        document.getElementById("hud-h").textContent = d.high.toFixed(2);
+                        document.getElementById("hud-l").textContent = d.low.toFixed(2);
+                        document.getElementById("hud-c").textContent = d.close.toFixed(2);
+                        document.getElementById("hud-v").textContent = d.volume.toLocaleString();
+                        
+                        const valClass = isBullish ? "text-green" : "text-red";
+                        document.querySelectorAll(".hud-val").forEach(el => {
+                            el.className = `hud-val ${valClass}`;
+                        });
+                    };
+
+                    plotGroup.appendChild(body);
+                });
+            };
+
+            setTimeout(svg.drawChart, 50);
+        }
+
+        function varCSS(variableName) {
+            return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+        }
+
+        // --------------------------------------------------
+        // F. Built-in Compilers 3: Custom Scoped Panel Widget
+        // --------------------------------------------------
+        function compileCustomWidget(container, widgetData, index) {
+            const scope = document.createElement("div");
+            scope.className = "custom-widget-scope";
+            scope.id = `custom-scope-${index}`;
+            scope.innerHTML = widgetData.html;
+
+            if (widgetData.css) {
+                const style = document.createElement("style");
+                const scopedCSS = widgetData.css.replace(/([^\r\n,{}]+)(?=[^{}]*\{)/g, (match) => {
+                    const selector = match.trim();
+                    if (selector.startsWith("@") || selector.startsWith("from") || selector.startsWith("to")) {
+                        return match; 
+                    }
+                    return `#custom-scope-${index} ${selector}`;
+                });
+                style.textContent = scopedCSS;
+                scope.appendChild(style);
+            }
+
+            container.appendChild(scope);
+
+            if (widgetData.js) {
+                if (container.dataset.intervalId) {
+                    clearInterval(parseInt(container.dataset.intervalId));
+                    container.dataset.intervalId = "";
+                }
+
+                try {
+                    const executor = new Function("container", "data", widgetData.js);
+                    executor(scope, widgetData.data);
+                } catch(err) {
+                    scope.innerHTML += `<div style="color: var(--accent-red); margin-top: 10px; font-family: var(--font-mono); font-size: 11px;">JS Execution Error: ${err.message}</div>`;
+                    console.error("Custom panel script compilation failed:", err);
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // G. The Compact Staircase Sorting Engine
+        // --------------------------------------------------
+        compactBtn.onclick = () => {
+            const openPanels = Array.from(document.querySelectorAll(".panel"));
+            if (openPanels.length === 0) return;
+
+            const dimensions = openPanels.map((p, i) => {
+                return {
+                    el: p,
+                    index: parseInt(p.dataset.index),
+                    width: p.offsetWidth,
+                    height: p.offsetHeight,
+                    area: p.offsetWidth * p.offsetHeight
+                };
+            });
+
+            dimensions.sort((a, b) => a.area - b.area);
+
+            dimensions.forEach((item, sortedIdx) => {
+                const p = item.el;
+                const panelIdx = item.index;
+
+                const targetX = sortedIdx * 35;
+                const targetY = sortedIdx * 35;
+
+                let defaultX = 0;
+                if (STATE.orientation === "horizontal") {
+                    for (let prevIdx = 0; prevIdx < panelIdx; prevIdx++) {
+                        const prevEl = document.getElementById(`panel-${prevIdx}`);
+                        if (prevEl) {
+                            defaultX += prevEl.offsetWidth + 40; 
+                        }
+                    }
+                }
+
+                const dragX = targetX - defaultX;
+                const dragY = targetY;
+
+                p.style.animation = "none";
+                p.style.transform = `translate(${dragX}px, ${dragY}px)`;
+                p.dataset.dragX = dragX;
+                p.dataset.dragY = dragY;
+
+                persistPanelLayout(panelIdx, dragX, dragY, p.style.width, p.style.height);
+            });
+
+            compactBanner.classList.add("banner-visible");
+            setTimeout(() => {
+                compactBanner.classList.remove("banner-visible");
+            }, 3000);
+        };
+
+        bootstrap();
+    </script>
+</body>
+</html>
