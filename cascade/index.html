@@ -681,8 +681,24 @@
                 const closeBtn = document.createElement("button");
                 closeBtn.className = "panel-close-btn";
                 closeBtn.innerHTML = "×";
-                closeBtn.onclick = (e) => {
+                closeBtn.onclick = async (e) => {
                     e.stopPropagation();
+                    
+                    // Notify server of panel close to clean up associated states
+                    try {
+                        await fetch("/api/callback", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                callback: "close_panel",
+                                row: { index: index },
+                                level: index
+                            })
+                        });
+                    } catch(err) {
+                        console.error("Failed to notify server of panel close:", err);
+                    }
+                    
                     clearDownstreamPanels(index);
                 };
                 headerEl.appendChild(closeBtn);
@@ -863,13 +879,68 @@
             const wrapper = document.createElement("div");
             wrapper.className = "widget-table-container";
 
-            // 1. Build real-time search box
+            // 1. Build real-time search box & Action Buttons
             const searchWrapper = document.createElement("div");
             searchWrapper.className = "table-search-wrapper";
+            searchWrapper.style.display = "flex";
+            searchWrapper.style.gap = "10px";
+            searchWrapper.style.alignItems = "center";
+
             const searchInput = document.createElement("input");
             searchInput.className = "table-search-input";
             searchInput.placeholder = "Search rows...";
+            searchInput.style.flex = "1";
             searchWrapper.appendChild(searchInput);
+
+            if (widgetData.on_clear) {
+                const clearBtn = document.createElement("button");
+                clearBtn.className = "table-clear-btn";
+                clearBtn.textContent = "Clear";
+                clearBtn.style.padding = "6px 12px";
+                clearBtn.style.background = "linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.25))";
+                clearBtn.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+                clearBtn.style.color = "var(--accent-red)";
+                clearBtn.style.borderRadius = "6px";
+                clearBtn.style.fontFamily = "var(--font-outfit)";
+                clearBtn.style.fontWeight = "600";
+                clearBtn.style.fontSize = "11.5px";
+                clearBtn.style.cursor = "pointer";
+                clearBtn.style.transition = "all 0.2s ease";
+                clearBtn.style.whiteSpace = "nowrap";
+
+                clearBtn.onmouseover = () => {
+                    clearBtn.style.background = "linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.35))";
+                    clearBtn.style.borderColor = "var(--accent-red)";
+                };
+                clearBtn.onmouseout = () => {
+                    clearBtn.style.background = "linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.25))";
+                    clearBtn.style.borderColor = "rgba(239, 68, 68, 0.4)";
+                };
+
+                clearBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    try {
+                        const response = await fetch("/api/callback", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                callback: widgetData.on_clear,
+                                row: {},
+                                level: index
+                            })
+                        });
+                        const downstream = await response.json();
+                        if (downstream.error) {
+                            alert("Clear Callback Failure: " + downstream.error);
+                            return;
+                        }
+                        renderPanel(index, downstream.widget_type, downstream.widget_data);
+                    } catch(err) {
+                        console.error("Table Clear Callback failed:", err);
+                    }
+                };
+                searchWrapper.appendChild(clearBtn);
+            }
             wrapper.appendChild(searchWrapper);
 
             // 2. Build table structure
@@ -958,6 +1029,32 @@
                                 renderPanel(index + 1, downstream.widget_type, downstream.widget_data);
                             } catch(err) {
                                 console.error("Cascade Callback failed:", err);
+                            }
+                        }
+                    };
+                    
+                    tr.ondblclick = async (e) => {
+                        e.stopPropagation();
+                        if (widgetData.on_dblclick) {
+                            try {
+                                const response = await fetch("/api/callback", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        callback: widgetData.on_dblclick,
+                                        row: row,
+                                        level: index
+                                    })
+                                });
+                                const downstream = await response.json();
+                                if (downstream.error) {
+                                    alert("Auditing Callback Error: " + downstream.error);
+                                    return;
+                                }
+                                
+                                renderPanel(index, downstream.widget_type, downstream.widget_data);
+                            } catch(err) {
+                                console.error("Table Row Double-Click Callback failed:", err);
                             }
                         }
                     };
@@ -1063,6 +1160,7 @@
                 const ohlcSpec = chartConfig["*OHLC"] || "";
                 const isLogY = String(ohlcSpec).includes("logY");
                 const isStockChartsTheme = String(ohlcSpec).includes("stockcharts") || widgetData.widget_type === "stockcharts";
+                const isOHLCNone = String(ohlcSpec).includes("none");
 
                 let highest = -Infinity;
                 let lowest = Infinity;
@@ -1190,8 +1288,8 @@
                     
                     if (isStockChartsTheme) {
                         if (isBullish) {
-                            strokeColor = "#cbd5e1"; // light grey outline
-                            fillColor = "none";      // hollow body
+                            strokeColor = "#10b981"; // solid green outline
+                            fillColor = "#10b981";   // solid green body
                         } else {
                             strokeColor = "#ef4444"; // red outline
                             fillColor = "#ef4444";   // solid red body
@@ -1201,42 +1299,88 @@
                         fillColor = isBullish ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)";
                     }
 
-                    const volH = getVolHeight(d.volume);
-                    const volY = margin.top + plotHeight - volH;
-                    const volRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                    volRect.setAttribute("x", x - (candleWidth / 2));
-                    volRect.setAttribute("y", volY);
-                    volRect.setAttribute("width", candleWidth);
-                    volRect.setAttribute("height", volH);
-                    volRect.setAttribute("fill", isBullish ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)");
-                    plotGroup.appendChild(volRect);
+                    if (!isOHLCNone) {
+                        const volH = getVolHeight(d.volume);
+                        const volY = margin.top + plotHeight - volH;
+                        const volRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                        volRect.setAttribute("x", x - (candleWidth / 2));
+                        volRect.setAttribute("y", volY);
+                        volRect.setAttribute("width", candleWidth);
+                        volRect.setAttribute("height", volH);
+                        volRect.setAttribute("fill", isBullish ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)");
+                        plotGroup.appendChild(volRect);
 
-                    const wick = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                    wick.setAttribute("x1", x);
-                    wick.setAttribute("y1", yHigh);
-                    wick.setAttribute("x2", x);
-                    wick.setAttribute("y2", yLow);
-                    wick.setAttribute("stroke", strokeColor);
-                    wick.setAttribute("stroke-width", "1.5");
-                    plotGroup.appendChild(wick);
+                        const wick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        wick.setAttribute("x1", x);
+                        wick.setAttribute("y1", yHigh);
+                        wick.setAttribute("x2", x);
+                        wick.setAttribute("y2", yLow);
+                        wick.setAttribute("stroke", strokeColor);
+                        wick.setAttribute("stroke-width", "1.5");
+                        plotGroup.appendChild(wick);
+                    }
 
-                    const body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                    const bodyY = Math.min(yOpen, yClose);
-                    const bodyH = Math.max(2, Math.abs(yOpen - yClose));
-                    
-                    body.setAttribute("x", x - (candleWidth / 2));
-                    body.setAttribute("y", bodyY);
-                    body.setAttribute("width", candleWidth);
-                    body.setAttribute("height", bodyH);
-                    body.setAttribute("fill", fillColor);
-                    body.setAttribute("stroke", strokeColor);
-                    body.setAttribute("stroke-width", "1.5");
+                    let body;
+                    if (isOHLCNone) {
+                        // Draw a dot/circle at the hl_val point
+                        if (d.hl_val !== undefined && d.hl_val !== null) {
+                            const hlY = getY(d.hl_val);
+                            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                            circle.setAttribute("cx", x);
+                            circle.setAttribute("cy", hlY);
+                            circle.setAttribute("r", "3.5");
+                            circle.setAttribute("fill", "var(--accent-cyan)");
+                            circle.setAttribute("class", `swing-point-dot-${i}`);
+                            circle.style.pointerEvents = "none";
+                            plotGroup.appendChild(circle);
+                        }
+
+                        // Create transparent full-height slice interaction targets
+                        body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                        body.setAttribute("x", x - (stepX / 2));
+                        body.setAttribute("y", margin.top);
+                        body.setAttribute("width", stepX);
+                        body.setAttribute("height", plotHeight);
+                        body.setAttribute("fill", "transparent");
+                        body.setAttribute("stroke", "none");
+                    } else {
+                        body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                        const bodyY = Math.min(yOpen, yClose);
+                        const bodyH = Math.max(2, Math.abs(yOpen - yClose));
+                        
+                        body.setAttribute("x", x - (candleWidth / 2));
+                        body.setAttribute("y", bodyY);
+                        body.setAttribute("width", candleWidth);
+                        body.setAttribute("height", bodyH);
+                        body.setAttribute("fill", fillColor);
+                        body.setAttribute("stroke", strokeColor);
+                        body.setAttribute("stroke-width", "1.5");
+                    }
                     
                     body.style.cursor = "pointer";
                     body.onclick = async (e) => {
                         e.stopPropagation();
                         plotGroup.querySelectorAll("rect").forEach(r => r.setAttribute("stroke-dasharray", "none"));
-                        body.setAttribute("stroke-dasharray", "2,2");
+                        
+                        if (!isOHLCNone) {
+                            body.setAttribute("stroke-dasharray", "2,2");
+                        } else {
+                            // Visual feedback for clicking a swing point: highlight the circle
+                            plotGroup.querySelectorAll("circle").forEach(c => {
+                                if (c.className && typeof c.className.baseVal === "string" && c.className.baseVal.startsWith("swing-point-dot-")) {
+                                    c.setAttribute("r", "3.5");
+                                    c.setAttribute("stroke", "none");
+                                    c.setAttribute("fill", "var(--accent-cyan)");
+                                }
+                            });
+                            const matchedCircle = plotGroup.querySelector(`.swing-point-dot-${i}`);
+                            if (matchedCircle) {
+                                matchedCircle.setAttribute("r", "5.5");
+                                matchedCircle.setAttribute("stroke", "#ffffff");
+                                matchedCircle.setAttribute("stroke-width", "1.5");
+                                matchedCircle.setAttribute("fill", "var(--accent-cyan)");
+                            }
+                        }
 
                         if (widgetData.on_click) {
                             try {
@@ -1268,7 +1412,9 @@
                         document.getElementById("hud-c").textContent = d.close.toFixed(2);
                         document.getElementById("hud-v").textContent = d.volume.toLocaleString();
                         
-                        const valClass = isBullish ? "text-green" : "text-red";
+                        const valClass = isOHLCNone 
+                            ? (d.type === 1 ? "text-green" : "text-red") 
+                            : (isBullish ? "text-green" : "text-red");
                         document.querySelectorAll(".hud-val").forEach(el => {
                             el.className = `hud-val ${valClass}`;
                         });
@@ -1314,7 +1460,21 @@
                             path.setAttribute("d", "M " + pathPoints.join(" L "));
                             path.setAttribute("fill", "none");
                             path.setAttribute("stroke", color);
-                            path.setAttribute("stroke-width", "1.5");
+                            
+                            // Determine dynamic stroke-width based on spec
+                            let strokeWidth = "1.5";
+                            if (spec && typeof spec === "object" && spec.width !== undefined) {
+                                strokeWidth = String(spec.width);
+                            } else if (typeof spec === "string") {
+                                const parts = spec.toLowerCase().split(" ");
+                                if (parts.includes("thinner")) {
+                                    strokeWidth = "0.6";
+                                } else if (parts.includes("thin")) {
+                                    strokeWidth = "0.9";
+                                }
+                            }
+                            
+                            path.setAttribute("stroke-width", strokeWidth);
                             path.setAttribute("pointer-events", "none");
                             plotGroup.appendChild(path);
                         }

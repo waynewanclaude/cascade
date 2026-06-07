@@ -15,7 +15,7 @@ It is designed for researchers, auditors, and developers who want to build custo
 * 📊 **Built-In High-Fidelity Components:**
   * **Interactive Tables:** Character-matching search filters, alphanumeric/percent column headers sorting, and click highlights that trigger dynamic callback cascades.
   * **SVG Candlestick Charts:** Computes coordinate bounds to draw wicks, candles, and transaction price overlays, complete with real-time hover price HUDs.
-  * **StockCharts Advanced Candlestick Explorer:** Mimics the classic StockCharts.com theme (hollow bullish candles and solid red bearish candles) with logarithmic Y axis scaling support (`logY`), custom technical indicators (e.g., moving average lines), event dots (precise price markers), and floating signal markers (e.g., green buy / red sell triangles).
+  * **StockCharts Advanced Candlestick Explorer:** Mimics the StockCharts.com layout with solid green bullish candles (optimized for large mouse target click area) and solid red bearish candles, with logarithmic Y axis scaling support (`logY`), custom technical indicators (e.g., moving average lines), event dots (precise price markers), and floating signal markers (e.g., green buy / red sell triangles).
   * **Custom Scoped Panels:** Sandboxes bespoke HTML, scoped CSS variables, and custom JavaScript loops using safe functional constructors IIFE with automatic memory cleanup.
 
 ---
@@ -146,7 +146,7 @@ visual_instructions = {
 ```
 
 ### Schema Rules & Options:
-1. **Classic Theme & Scaling (`*OHLC`)**: Specifying `"stockcharts"` activates a classic white/black hollow bullish body outline and red solid bearish body fill. Adding `;logY` automatically applies a logarithmic price scaling transformation, preventing mathematical log overflows by clamping Y offsets.
+1. **Classic Theme & Scaling (`*OHLC`)**: Specifying `"stockcharts"` activates a classic solid green bullish body and red solid bearish body fill (optimized for solid SVG click targets). Adding `;logY` automatically applies a logarithmic price scaling transformation, preventing mathematical log overflows by clamping Y offsets.
 2. **Indicator Lines**: Formatted as `<color> line` (e.g., `"cyan line"`). Renders a continuous, smooth SVG path connecting row coordinates.
 3. **Event Dots**: Formatted as `<color> dot` or `<color> circle`. Plotted precisely on the mapped price coordinates of that column.
 4. **Floating Triangles**: Maps categorical string signals (like `"buy"`/`"sell"`) to relative offsets. Triangles specified with `"up"` or `"green"` dynamically float cleanly below the candlestick's low wick. Triangles specified with `"down"` or `"red"` hover above the high wick.

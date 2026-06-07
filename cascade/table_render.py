@@ -25,12 +25,14 @@ def format_percent(val, sign=False):
         return str(val)
 
 class Table:
-    def __init__(self, data, columns=None, on_click=None, title=None, width=None, height=None):
+    def __init__(self, data, columns=None, on_click=None, on_dblclick=None, on_clear=None, title=None, width=None, height=None):
         self.type_name = "table"
         self.title = title
         self.width = width
         self.height = height
         self.on_click_callback = on_click
+        self.on_dblclick_callback = on_dblclick
+        self.on_clear_callback = on_clear
         
         self.columns = []
         self.rows = []
@@ -81,5 +83,7 @@ class Table:
             "height": self.height,
             "columns": self.columns,
             "rows": self.rows,
-            "on_click": self.on_click_callback.__name__ if self.on_click_callback is not None else None
+            "on_click": self.on_click_callback.__name__ if self.on_click_callback is not None else None,
+            "on_dblclick": self.on_dblclick_callback.__name__ if self.on_dblclick_callback is not None else None,
+            "on_clear": self.on_clear_callback.__name__ if self.on_clear_callback is not None else None
         }
